@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="CyberSec Hub Desktop Environment: Access modules via clickable folders on your virtual desktop while enjoying the classic terminal vibe."
+    />
+    <title>CyberSec Hub Desktop</title>
+    <style>
+      /* ------------------------- */
+      /* Base Variables & Reset    */
+      /* ------------------------- */
+      :root {
+        --terminal-green: #00ff00;
+        --matrix-green: #20c20e;
+        --background: #000;
+        --nav-height: 60px;
+        --desktop-bg: #000;
+        --folder-bg: #111;
+        --folder-border: #20c20e;
+        --folder-hover: #00ff00;
+        --text-color: #20c20e;
+        --font-family: "Courier New", monospace;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--background);
+        color: var(--text-color);
+        font-family: var(--font-family);
+        overflow: hidden;
+        /* Custom cursor: replace the URL with your own cursor image */
+        cursor: url("custom-cursor.png"), auto;
+        position: relative;
+      }
+      
+      /* ------------------------- */
+      /* Matrix Grid (Canvas)      */
+      /* ------------------------- */
+      .matrix-grid {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: 
+          linear-gradient(rgba(0, 255, 0, 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 255, 0, 0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+        pointer-events: none;
+        z-index: -2;
+      }
+      /* CRT style overlay (optional) */
+      body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.15),
+          rgba(0, 0, 0, 0.15) 1px,
+          transparent 1px,
+          transparent 2px
+        );
+        pointer-events: none;
+        z-index: -1;
+      }
+      
+      /* ------------------------- */
+      /* Navigation Bar            */
+      /* ------------------------- */
+      .nav-bar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: fixed;
+        top: 0;
+        width: 100%;
+        height: var(--nav-height);
+        background: rgba(0, 0, 0, 0.9);
+        padding: 0 1rem;
+        border-bottom: 1px solid var(--matrix-green);
+        z-index: 1000;
+      }
+      .nav-container {
+        position: relative;
+        width: 90%;
+        max-width: 1200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* Hamburger toggle (for mobile view) */
+      .menu-toggle {
+        position: absolute;
+        left: 1rem;
+        display: none;
+        flex-direction: column;
+        cursor: pointer;
+      }
+      .menu-toggle .bar {
+        width: 25px;
+        height: 3px;
+        background-color: var(--matrix-green);
+        margin: 4px 0;
+        transition: 0.4s;
+      }
+      .menu-toggle.active .bar:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+      }
+      .menu-toggle.active .bar:nth-child(2) {
+        opacity: 0;
+      }
+      .menu-toggle.active .bar:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+      }
+      .nav-links {
+        list-style: none;
+        display: flex;
+        gap: 2rem;
+      }
+      .nav-link {
+        color: var(--matrix-green);
+        text-decoration: none;
+        text-transform: uppercase;
+        position: relative;
+        padding: 0.5rem 1rem;
+      }
+      .nav-link::before {
+        content: ">";
+        margin-right: 0.5rem;
+      }
+      .nav-link:hover {
+        color: #fff;
+        text-shadow: 0 0 10px var(--matrix-green);
+      }
+      /* Responsive adjustments for navigation */
+      @media (max-width: 768px) {
+        .menu-toggle {
+          display: flex;
+          position: relative;
+          left: auto;
+        }
+        .nav-container {
+          justify-content: space-between;
+        }
+        .nav-links {
+          position: fixed;
+          top: var(--nav-height);
+          left: -100%;
+          flex-direction: column;
+          background: rgba(0, 0, 0, 0.95);
+          width: 100%;
+          height: calc(100vh - var(--nav-height));
+          align-items: center;
+          justify-content: center;
+          transition: left 0.3s ease;
+          gap: 2rem;
+          z-index: 998;
+        }
+        .nav-links.active {
+          left: 0;
+        }
+      }
+      
+      /* ------------------------- */
+      /* Desktop Environment       */
+      /* ------------------------- */
+      .desktop {
+        position: absolute;
+        top: var(--nav-height);
+        left: 0;
+        width: 100%;
+        height: calc(100vh - var(--nav-height));
+        background: var(--desktop-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 0;
+      }
+      /* Centered Folder Container */
+      .folder-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 40px;
+        /* Optional: Add a faint border for visualization (remove later) */
+        /* border: 1px dashed rgba(255,255,255,0.2); */
+        padding: 20px;
+      }
+      /* Folder Styles */
+      .folder {
+        width: 100px;
+        height: 120px;
+        background: var(--folder-bg);
+        border: 2px solid var(--folder-border);
+        border-radius: 8px;
+        text-align: center;
+        padding-top: 20px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+      .folder:hover {
+        border-color: var(--folder-hover);
+        transform: translateY(-5px);
+      }
+      /* Folder Icon & Label */
+      .folder-icon {
+        font-size: 40px;
+        margin-bottom: 10px;
+      }
+      .folder-label {
+        font-size: 14px;
+      }
+      
+      /* ------------------------- */
+      /* Optional Taskbar at Bottom*/
+      /* ------------------------- */
+      .taskbar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.85);
+        border-top: 1px solid var(--folder-border);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        z-index: 100;
+      }
+      .taskbar-item {
+        margin-right: 15px;
+        cursor: pointer;
+      }
+      .taskbar-item:hover {
+        color: var(--folder-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Matrix Grid Background -->
+    <div class="matrix-grid"></div>
+
+    <!-- Navigation Bar -->
+    <nav class="nav-bar" aria-label="Main Navigation">
+      <div class="nav-container">
+        <div class="menu-toggle" id="mobile-menu" aria-label="Toggle navigation">
+          <span class="bar"></span>
+          <span class="bar"></span>
+          <span class="bar"></span>
+        </div>
+        <ul class="nav-links">
+          <li><a href="#home" class="nav-link">/home</a></li>
+          <li><a href="#modules" class="nav-link">/modules</a></li>
+          <li><a href="#vulnerabilities" class="nav-link">/vuln_db</a></li>
+          <li><a href="#contact" class="nav-link">/contact</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- Desktop Environment -->
+    <div class="desktop">
+      <!-- Centered Folder Container -->
+      <div class="folder-container">
+        <!-- Clickable Folders Representing Modules -->
+        <div class="folder" onclick="openModule('Module 1')" title="Open Module 1">
+          <div class="folder-icon">&#128193;</div>
+          <div class="folder-label">Module 1</div>
+        </div>
+        <div class="folder" onclick="openModule('Module 2')" title="Open Module 2">
+          <div class="folder-icon">&#128193;</div>
+          <div class="folder-label">Module 2</div>
+        </div>
+        <div class="folder" onclick="openModule('Module 3')" title="Open Module 3">
+          <div class="folder-icon">&#128193;</div>
+          <div class="folder-label">Module 3</div>
+        </div>
+        <div class="folder" onclick="openModule('Module 4')" title="Open Module 4">
+          <div class="folder-icon">&#128193;</div>
+          <div class="folder-label">Module 4</div>
+        </div>
+        <div class="folder" onclick="openModule('Module 5')" title="Open Module 5">
+          <div class="folder-icon">&#128193;</div>
+          <div class="folder-label">Module 5</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Optional Taskbar -->
+    <div class="taskbar">
+      <div class="taskbar-item" onclick="alert('Desktop clicked!')">Desktop</div>
+      <!-- Additional taskbar items can be added here -->
+    </div>
+
+    <!-- JavaScript for Menu Toggle and Folder Clicks -->
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const mobileMenu = document.getElementById("mobile-menu");
+        const navLinks = document.querySelector(".nav-links");
+        const navLinkItems = document.querySelectorAll(".nav-link");
+
+        // Toggle mobile menu visibility and change icon
+        mobileMenu.addEventListener("click", () => {
+          mobileMenu.classList.toggle("active");
+          navLinks.classList.toggle("active");
+        });
+
+        // Hide mobile menu when any nav link is clicked
+        navLinkItems.forEach((link) => {
+          link.addEventListener("click", () => {
+            mobileMenu.classList.remove("active");
+            navLinks.classList.remove("active");
+          });
+        });
+      });
+
+      // Function to simulate opening a module
+      function openModule(moduleName) {
+        // Replace this alert with your module-loading/navigation logic
+        alert("Opening " + moduleName);
+      }
+    </script>
+  </body>
+</html>
